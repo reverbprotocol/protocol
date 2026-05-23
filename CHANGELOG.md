@@ -1,5 +1,35 @@
 # Changelog
 
+## 2026-05-24 — Substrate primitives
+
+Six new interfaces with reference implementations under `src/reference/`. Each interface defines a cross-consumer standard; the reference impls are one valid implementation each, suitable for direct use or as a starting point for consumer-specific variants.
+
+### New interfaces
+
+- **`src/IBountyAccrual.sol`**: bounty-accrual surface. A funder credits a recipient with a claim amount; the recipient claims later. Implementations choose the funding asset and funding policy.
+- **`src/IReputationRegistry.sol`**: cumulative reputation scoring. Designated recorders log uphold or reject outcomes against agent addresses; implementations choose the score deltas and any decay policy.
+- **`src/ICCTPReceiver.sol`** (plus `src/CCTPReceiverMixin.sol`): standard receive-and-dispatch surface for CCTP v2 messages on Arc. The abstract mixin handles the `MessageTransmitterV2` call, USDC balance accounting, and payload extraction; consumer contracts override `handlePayload`.
+- **`src/IBondYieldVault.sol`**: yield-bearing principal vault. Deposit principal; withdraw principal plus accrued yield. Implementations choose the underlying yield source and any aggregation policy.
+- **`src/IStableFXSwap.sol`**: atomic same-block stablecoin FX swap surface. Quote-then-execute pattern with explicit `minOut`.
+- **`src/IAttributable.sol`**: marker interface documenting the `bytes32 builder` attribution convention for third-party UI surfaces. The convention is the standard; the marker provides a stable on-chain handle for tooling.
+
+### New reference implementations
+
+- **`src/reference/BountyAccrualVanilla.sol`**: USDC-funded accrual + claim. Funder approves the contract for `amount`; recipient claims by `claimId` after accrual.
+- **`src/reference/ReputationRegistryVanilla.sol`**: per-recorder uphold/reject with constructor-configured deltas. No decay, no recorder rotation, no admin keys.
+- **`src/reference/USYCBondVault.sol`**: wraps the USYC Teller on Arc-testnet. Subscribes USDC principal; tracks per-account pro-rata claims. Constructor selects strict (per-deposit minimum enforcement) or aggregated (batch on threshold) policy to handle USYC's $100K minimum subscription.
+- **`src/reference/FxEscrowAdapter.sol`**: routes through StableFX FxEscrow on Arc-testnet for atomic USDC <-> EURC settlement. Slippage-protected via `minOut`.
+
+### Tests
+
+- `test/BountyAccrualVanilla.t.sol`: 4 tests (happy path, non-recipient revert, double-claim revert, zero-amount revert).
+- `test/ReputationRegistryVanilla.t.sol`: 4 tests (positive delta, negative delta, unauthorized recorder revert, zero default).
+- `test/CCTPReceiverMixin.t.sol`: 4 tests (mint+dispatch, transmitter-fail revert, balance-delta accounting, short-message empty payload). Uses a mock MessageTransmitterV2.
+- `test/USYCBondVault.t.sol`: 5 tests (strict subscribe, strict below-min revert, aggregated batch trigger, withdraw with yield, accrued-yield view). Uses a mock Teller with configurable yield accrual.
+- `test/FxEscrowAdapter.t.sol`: 3 tests (quote, execute at rate, min-out slippage revert). Uses a mock FxEscrow.
+
+Twenty new tests; previous thirteen RefundProtocolFixed tests unchanged. Suite: 33 of 33.
+
 ## 2026-05-23 — Extracted
 
 Extracted as a standalone substrate library from `project-reverb/apps/dispute-escrow/`. The Operator contract and the prediction-market consumer surface moved to `reverbprotocol/markets`. This repository holds the dispute primitive only.

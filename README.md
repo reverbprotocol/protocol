@@ -12,6 +12,30 @@ Reverb Protocol is the substrate library for dispute-mediated commerce on Arc. E
 | `test/RefundProtocolFixed.t.sol` | Test suite for the fixed implementation. |
 | `test/vendor/RefundProtocolUpstream.sol` | Vendored upstream contract used in differential tests. |
 
+## Substrate primitives
+
+Five substrate-level interfaces with reference implementations under `src/reference/`. Each interface is the cross-consumer standard; the reference implementations are one valid impl. Consumer products may ship their own conformant implementations with product-specific economics.
+
+| Interface | Reference implementation | Purpose |
+|---|---|---|
+| `src/IBountyAccrual.sol` | `src/reference/BountyAccrualVanilla.sol` | Accrue and claim bounty notional. Funder credits a recipient; recipient claims later. |
+| `src/IReputationRegistry.sol` | `src/reference/ReputationRegistryVanilla.sol` | Cumulative reputation scoring. Designated recorders log uphold or reject outcomes. |
+| `src/ICCTPReceiver.sol` | `src/CCTPReceiverMixin.sol` (abstract) | Receive CCTP v2 messages on Arc, mint USDC, dispatch a consumer payload. |
+| `src/IBondYieldVault.sol` | `src/reference/USYCBondVault.sol` | Deposit principal in a yield-bearing tokenized treasury wrapper; withdraw principal plus accrued yield. |
+| `src/IStableFXSwap.sol` | `src/reference/FxEscrowAdapter.sol` | Atomic same-block stablecoin FX swap. EURC <-> USDC via StableFX FxEscrow. |
+| `src/IAttributable.sol` | (marker) | The `bytes32 builder` attribution convention for third-party UI surfaces. |
+
+The reference implementations are wired to Arc-testnet pre-deployed contracts:
+
+- `CCTPReceiverMixin` targets `MessageTransmitterV2` at `0xE737e5cEBEEBa77EFE34D4aa090756590b1CE275`.
+- `USYCBondVault` targets the USYC Teller at `0x9fdF14c5B14173D74C08Af27AebFf39240dC105A`.
+- `FxEscrowAdapter` targets StableFX FxEscrow at `0x867650F5eAe8df91445971f14d89fd84F0C9a9f8`.
+
+Consumer products that adopt the substrate:
+
+- `reverbprotocol/markets`: `Operator.sol` adopts the `IAttributable` convention on every fill entry point.
+- `damanfi/copy-bond`: declares conformance to `IBountyAccrual`, `IReputationRegistry`, and the `IAttributable` convention.
+
 ## Fix summary
 
 Four classes of correctness fix applied to the upstream contract, each marked inline with `FIX-{N}`:
