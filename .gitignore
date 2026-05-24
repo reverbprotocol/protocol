@@ -6,3 +6,8 @@ lib/
 .env.*
 *.log
 .DS_Store
+
+# VitePress docs
+docs/node_modules/
+docs/.vitepress/dist/
+docs/.vitepress/cache/
