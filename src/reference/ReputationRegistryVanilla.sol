@@ -12,6 +12,13 @@ import {IReputationRegistry} from "../IReputationRegistry.sol";
 /// @notice Minimal reference implementation of `IReputationRegistry`. Recorders are designated
 ///         at construction; positive and negative deltas are configured at construction. Score
 ///         updates emit `ReputationUpdated`. No decay, no recorder rotation, no admin keys.
+/// @dev    Reference, not for production deploy. Wrap behind an ERC1967 proxy with UUPS-style
+///         upgrade controls if score deltas or recorder set need to evolve; otherwise deploy as
+///         a sealed singleton with intentionally-immutable parameters. Either path: route any
+///         upgrade authority through a `TimelockController` fronted by a Safe multisig, and run
+///         the contract through static analysis and storage-layout CI before any chain-side
+///         deploy. This reference is shipped for direct fork-and-adapt; production controls are
+///         the consumer's responsibility.
 contract ReputationRegistryVanilla is IReputationRegistry {
     int256 public immutable upheldDelta;
     int256 public immutable rejectedDelta;

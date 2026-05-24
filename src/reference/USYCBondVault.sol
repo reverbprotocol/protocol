@@ -40,6 +40,14 @@ interface IUSYCTeller {
 ///         on the vault's total subscribed shares plus the un-subscribed pending bucket. On
 ///         withdrawal, the account's share is redeemed from the Teller and any pending portion
 ///         is returned directly without subscription.
+///
+///         Reference, not for production deploy. Wrap behind an ERC1967 proxy with UUPS-style
+///         upgrade controls, mix in `PausableUpgradeable` on `depositPrincipal` and
+///         `withdrawPrincipalWithYield`, route owner authority through a `TimelockController`
+///         fronted by a Safe multisig, and run the contract through static analysis and
+///         storage-layout CI before any chain-side deploy. The yield-bearing surface raises the
+///         stakes: a bug here corrupts principal. This reference is shipped for direct
+///         fork-and-adapt; production controls are the consumer's responsibility.
 contract USYCBondVault is IBondYieldVault, ReentrancyGuard {
     using SafeERC20 for IERC20;
 

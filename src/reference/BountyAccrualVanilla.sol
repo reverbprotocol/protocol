@@ -17,6 +17,12 @@ import {IBountyAccrual} from "../IBountyAccrual.sol";
 ///         approved this contract to pull the bounty asset; recipients claim their accrued
 ///         amounts on demand. Consumer products choose funding policy by deciding when and how
 ///         much to call `accrueBounty`; this implementation has no opinion on the source.
+/// @dev    Reference, not for production deploy. Wrap behind an ERC1967 proxy with UUPS-style
+///         upgrade controls, mix in `PausableUpgradeable` on `accrueBounty` and `claimBounty`,
+///         route owner authority through a `TimelockController` fronted by a Safe multisig, and
+///         run the contract through static analysis (slither + mythril) and storage-layout CI
+///         before any chain-side deploy. This reference is shipped for direct fork-and-adapt;
+///         the on-chain controls are the consumer's responsibility.
 contract BountyAccrualVanilla is IBountyAccrual, ReentrancyGuard {
     using SafeERC20 for IERC20;
 

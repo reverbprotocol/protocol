@@ -36,6 +36,10 @@ Consumer products that adopt the substrate:
 - `reverbprotocol/markets`: `Operator.sol` adopts the `IAttributable` convention on every fill entry point.
 - `damanfi/copy-bond`: declares conformance to `IBountyAccrual`, `IReputationRegistry`, and the `IAttributable` convention.
 
+### HumdRegistry: immutable trust anchor + sidecar pattern
+
+HumdRegistry is the immutable trust anchor for any hum subnet built on Reverb Protocol. The registry's identity layer never changes; extensions compose sideways. Daman's `ReputationRegistry` and `BountyAccrual` (in `damanfi/copy-bond`) are sidecars keyed by the same address space as HumdRegistry but storing their own state, separately upgradeable. The split is intentional: the integrity-critical write path (HumdRegistry's advertise + ownership rule) stays physically untouchable; the application-specific state (reputation, bounty, future annotations) lives in upgradeable sibling contracts. Pattern documented in https://github.com/adiled/hum/issues/39.
+
 ## Fix summary
 
 Four classes of correctness fix applied to the upstream contract, each marked inline with `FIX-{N}`:

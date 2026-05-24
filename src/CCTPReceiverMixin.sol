@@ -22,6 +22,13 @@ import {ICCTPReceiver, IMessageTransmitterV2} from "./ICCTPReceiver.sol";
 ///         148 bytes of outer message header + 228 bytes of burn-message fixed fields = 376
 ///         bytes of standard prefix, then variable `hookData`. Override `_decodePayload` if your
 ///         relayer uses a different encoding.
+///
+///         Abstract reference. The mixin adds no governance surface; it only dispatches CCTP
+///         receives to a consumer hook. The inheriting contract is responsible for the
+///         production-deploy controls: wrap behind an ERC1967 proxy with UUPS-style upgrade
+///         controls, mix in `PausableUpgradeable` on `onCCTPReceive`, route owner authority
+///         through a `TimelockController` fronted by a Safe multisig, and run the inheriting
+///         contract through static analysis and storage-layout CI before any chain-side deploy.
 abstract contract CCTPReceiverMixin is ICCTPReceiver {
     /// @notice MessageTransmitterV2 on the destination chain (Arc testnet: 0xE737...DC275).
     IMessageTransmitterV2 public immutable messageTransmitter;

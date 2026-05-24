@@ -29,6 +29,15 @@ interface IFxEscrow {
 ///         the resulting `to` asset back to the caller.
 /// @dev    Intended for atomic same-block USDC <-> EURC settlement on Arc. The reference engine
 ///         enforces venue-side liquidity and pricing; this adapter is a thin wrapper.
+///
+///         Reference, not for production deploy. Wrap behind an ERC1967 proxy with UUPS-style
+///         upgrade controls, mix in `PausableUpgradeable` on `executeSwap`, route owner
+///         authority through a `TimelockController` fronted by a Safe multisig, and run the
+///         contract through static analysis and storage-layout CI before any chain-side deploy.
+///         The slippage guard is the minimum production control; additional controls (per-asset
+///         caps, per-account rate limits, oracle deviation guards on the quoted price) live in
+///         the consumer's wrapper. This reference is shipped for direct fork-and-adapt;
+///         production controls are the consumer's responsibility.
 contract FxEscrowAdapter is IStableFXSwap, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
