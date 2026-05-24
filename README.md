@@ -40,6 +40,20 @@ Consumer products that adopt the substrate:
 
 HumdRegistry is the immutable trust anchor for any hum subnet built on Reverb Protocol. The registry's identity layer never changes; extensions compose sideways. Daman's `ReputationRegistry` and `BountyAccrual` (in `damanfi/copy-bond`) are sidecars keyed by the same address space as HumdRegistry but storing their own state, separately upgradeable. The split is intentional: the integrity-critical write path (HumdRegistry's advertise + ownership rule) stays physically untouchable; the application-specific state (reputation, bounty, future annotations) lives in upgradeable sibling contracts. Pattern documented in https://github.com/adiled/hum/issues/39.
 
+## Security posture
+
+The deployed configuration on Arc testnet (`.deployments/arc-testnet.json`):
+
+- **UUPS upgradeable.** `RefundProtocolFixed` is an `Initializable` + `UUPSUpgradeable` contract behind an ERC1967 proxy. Implementation deployed at the addresses in the deployments file; upgrade authority gated by `_authorizeUpgrade` on the owner.
+- **TimelockController owns upgrade authority.** The proxy's `owner()` is a TimelockController with a 24-hour minimum delay. Every upgrade is `schedule()`'d, visible on-chain during the delay window, and `execute()`'d only after the delay elapses. Cancellable during the window.
+- **Safe multisig fronts the TimelockController.** A 3-of-5 Safe is the sole proposer + executor on the TimelockController. The Safe address holds the testnet-posture signer roster; production rotation to independent signers is a documented mainnet pre-requisite.
+- **Pausable critical paths.** `pay`, `refundByRecipient`, `refundByArbiter`, `withdraw`, `earlyWithdrawByArbiter` are gated by `whenNotPaused`. `pause()` is callable by the `pauser` address (Safe directly, no Timelock delay; emergency stop). `unpause()` is `onlyOwner` (Timelock-gated, 24h). `settleDebt`, `depositArbiterFunds`, `withdrawArbiterFunds`, `setLockupSeconds`, `updateRefundTo` remain live during pause so cleanup and admin paths are not halted.
+- **Reentrancy.** `ReentrancyGuardTransient` (EIP-1153 transient storage; Arc Cancun config) on every state-mutating external function. CEI ordering verified across all fix paths.
+- **Selector + event freeze tests.** `test/SelectorFreezeRefundProtocolFixed.t.sol` locks 12 external function selectors and 6 event topic hashes. Any change to a signature or event shape fails the freeze test before merge.
+- **Stateful fuzz invariants.** `test/RefundProtocolInvariant.t.sol` runs 256 fuzz runs (128,000 calls per invariant) asserting the FIX-2 cumulative-withdraw bound and aggregate balance integrity. 0 reverts, 0 invariant failures.
+- **Slither static analysis.** `.github/workflows/security.yml` runs Slither on every PR with `fail-on=high`. Mythril runs nightly via cron and uploads a markdown report as an artifact.
+- **Production-deploy guidance** on each reference implementation in `src/reference/` so consumer products can replicate the same discipline.
+
 ## Fix summary
 
 Four classes of correctness fix applied to the upstream contract, each marked inline with `FIX-{N}`:
