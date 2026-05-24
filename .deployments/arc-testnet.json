@@ -28,12 +28,17 @@
   },
   "contracts": {
     "RefundProtocolFixed": {
-      "proxy": "0x0000000000000000000000000000000000000000",
-      "implementation": "0x0000000000000000000000000000000000000000",
+      "proxy": "0xc8bF99c55703bc682a3Efd5c8A728EaEda3E121F",
+      "implementation": "0xc4d76141CEA6b8D4b1bBF467e92d6a87F46C53Ed",
       "owner": "0xa22510860289751C092e67B15b827020CE09DAbf",
-      "deployedAt": "",
+      "pauser": "0x70a34ca4964a16a934432871a593acba5dd63cf1",
+      "arbiter": "0x5dF7624bc9845bcEB871652fED33A562E23D8AEd",
+      "fiatToken": "0x3600000000000000000000000000000000000000",
+      "eip712Name": "RefundProtocolFixed",
+      "eip712Version": "1",
+      "deployedAt": "2026-05-24T17:32:00Z",
       "version": 1,
-      "comment": "Populated after UUPS refactor + atomic deploy script lands."
+      "comment": "UUPS proxy. Initialize set owner=Timelock, pauser=Safe, arbiter=deployer (testnet posture). Mainnet pre-requisite: rotate arbiter to a dedicated multisig before mainnet."
     }
   }
 }
