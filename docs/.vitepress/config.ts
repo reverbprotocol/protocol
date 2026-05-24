@@ -2,7 +2,7 @@ import { defineConfig } from 'vitepress'
 
 export default defineConfig({
   title: 'Reverb Protocol',
-  description: 'Substrate library for dispute-mediated commerce on Arc. Interfaces, reference implementations, and the deployed UUPS proxy on Arc testnet.',
+  description: 'Substrate library for dispute-mediated commerce on Arc. Interfaces, reference implementations, operating model, and the deployed UUPS proxy on Arc testnet.',
   base: '/protocol/',
   cleanUrls: true,
   appearance: 'dark',
@@ -10,11 +10,13 @@ export default defineConfig({
   themeConfig: {
     nav: [
       { text: 'Overview', link: '/' },
-      { text: 'Autonomy spectrum', link: '/AUTONOMY_SPECTRUM' },
+      { text: 'Quickstart', link: '/quickstart' },
+      { text: 'Architecture', link: '/architecture' },
+      { text: 'Autonomy', link: '/AUTONOMY_SPECTRUM' },
       { text: 'Operating model', link: '/OPERATING_MODEL' },
       { text: 'Interfaces', link: '/interfaces/' },
-      { text: 'Reference', link: '/reference/' },
-      { text: 'CHANGELOG', link: '/changelog' },
+      { text: 'Scenarios', link: '/scenarios/' },
+      { text: 'Guides', link: '/guides/build-your-own-forager' },
       { text: 'GitHub', link: 'https://github.com/reverbprotocol/protocol' },
     ],
     sidebar: [
@@ -22,6 +24,8 @@ export default defineConfig({
         text: 'Start',
         items: [
           { text: 'Overview', link: '/' },
+          { text: 'Quickstart', link: '/quickstart' },
+          { text: 'Architecture', link: '/architecture' },
           { text: 'Autonomy spectrum', link: '/AUTONOMY_SPECTRUM' },
           { text: 'Operating model', link: '/OPERATING_MODEL' },
         ],
@@ -29,6 +33,7 @@ export default defineConfig({
       {
         text: 'Substrate primitives',
         items: [
+          { text: 'Overview', link: '/interfaces/' },
           { text: 'IRefundProtocol', link: '/interfaces/IRefundProtocol' },
           { text: 'IBountyAccrual', link: '/interfaces/IBountyAccrual' },
           { text: 'IReputationRegistry', link: '/interfaces/IReputationRegistry' },
@@ -45,6 +50,22 @@ export default defineConfig({
         ],
       },
       {
+        text: 'Scenarios',
+        items: [
+          { text: 'Overview', link: '/scenarios/' },
+          { text: 'Dispute via hum', link: '/scenarios/dispute-via-hum' },
+          { text: 'Cross-product arbiter', link: '/scenarios/cross-product-arbiter' },
+          { text: 'UUPS upgrade lifecycle', link: '/scenarios/uups-upgrade' },
+        ],
+      },
+      {
+        text: 'Guides',
+        items: [
+          { text: 'Build your own forager', link: '/guides/build-your-own-forager' },
+          { text: 'Build your own persona', link: '/guides/build-your-own-persona' },
+        ],
+      },
+      {
         text: 'Architecture',
         items: [
           { text: 'HumdRegistry sidecar pattern', link: '/humd-registry-sidecar' },
@@ -55,6 +76,8 @@ export default defineConfig({
         text: 'Reference',
         items: [
           { text: 'CHANGELOG', link: '/changelog' },
+          { text: 'FAQ', link: '/faq' },
+          { text: 'Glossary', link: '/glossary' },
           { text: 'Source on GitHub', link: 'https://github.com/reverbprotocol/protocol' },
         ],
       },
