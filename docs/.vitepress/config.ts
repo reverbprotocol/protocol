@@ -11,6 +11,7 @@ export default defineConfig({
     nav: [
       { text: 'Overview', link: '/' },
       { text: 'Autonomy spectrum', link: '/AUTONOMY_SPECTRUM' },
+      { text: 'Operating model', link: '/OPERATING_MODEL' },
       { text: 'Interfaces', link: '/interfaces/' },
       { text: 'Reference', link: '/reference/' },
       { text: 'CHANGELOG', link: '/changelog' },
@@ -22,6 +23,7 @@ export default defineConfig({
         items: [
           { text: 'Overview', link: '/' },
           { text: 'Autonomy spectrum', link: '/AUTONOMY_SPECTRUM' },
+          { text: 'Operating model', link: '/OPERATING_MODEL' },
         ],
       },
       {

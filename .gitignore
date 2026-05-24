@@ -11,3 +11,7 @@ lib/
 docs/node_modules/
 docs/.vitepress/dist/
 docs/.vitepress/cache/
+
+# Cargo workspace (foragers/)
+target/
+Cargo.lock

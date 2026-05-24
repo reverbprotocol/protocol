@@ -1,0 +1,15 @@
+[package]
+name = "reverb-arc-fs"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Canonical resource forager for Arc chain state + wallet operations. Per the Reverb Protocol operating-model standard at https://reverbprotocol.github.io/protocol/OPERATING_MODEL ."
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+async-trait.workspace = true
+tokio.workspace = true
+tracing.workspace = true
