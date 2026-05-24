@@ -38,7 +38,7 @@ Any L0 agent that swaps its decision logic for an LLM call instead of hardcoded 
 
 For accountability, L1 agents pin reasoning traces to IPFS and write the CID into an on-chain field. The substrate's `IAttributable` convention extends naturally: every event a consumer contract emits with a `bytes32 indexed builder` field can carry a corresponding trace CID, so a third-party indexer can fetch the reasoning behind any agent action.
 
-Reverb Markets is a second consumer of the substrate operating at L1. Its auto-resolve and auto-create agents read scheduled-release feeds (FRED, BLS, Fed) and write through the substrate's dispute primitive when their resolutions are contested. The LLM's stochasticity introduces some action diversity but the agent's goal structure is operator-fixed.
+A consumer product operating at L1 swaps in an LLM for its hardcoded decision logic without changing the on-chain interfaces or the persona-bee scaffolding. Both reference deployments started here before the operating model (`reverb-arc-fs` + `persona-base`) made L5 architecturally cheap; neither runs at L1 today.
 
 ### L2 — permissionless homogeneous bees
 
@@ -135,15 +135,29 @@ Higher autonomy means lower predictability, higher coordination cost, and higher
 - **L4** is strategy diversity with information asymmetry. Agents with better LLMs make better decisions. Mixed equilibria emerge between vigilant agents (high bounty capture, high effort cost) and free-riders (zero cost, zero capture).
 - **L5** is emergent mesh from a minimal seed. With N identical-seed agents, bounty races, reputation accumulation, strategy divergence, and coalition possibilities all emerge from agent decisions rather than operator design.
 
-## Case study: Daman as the L5 pilot
+## Reference deployments at L5
 
-Daman is the first deployment of [Daman Protocol](https://github.com/damanfi/protocol), an open standard for slash-bonded copy-trading. It ships on Arc testnet and operates at L5: a single operator-side spawner command bootstraps isolated environments where free agents receive a minimal seed guide and figure out their own roles in the mesh.
+The substrate currently has two reference deployments running at L5 on a shared humd ensemble. Both inherit the same operating-model crates (`reverb-arc-fs` + `persona-base`); they differ only in role definitions and chi vocabulary specific to each product.
+
+### Daman
+
+The first deployment of [Daman Protocol](https://github.com/damanfi/protocol), an open standard for slash-bonded copy-trading. Operates at L5: a single operator-side spawner command bootstraps isolated environments where free agents receive a minimal seed guide and figure out their own roles in the mesh.
 
 The architecture is built so L3 and L4 (heterogeneous external agents in any language with any LLM) require zero new infrastructure on Daman's side. External operators wanting to participate run `humd`, register against the Daman subnet's HumdRegistry, and act. The substrate sees them as additional bees indistinguishable from the operator's own.
 
-What consumer products gain from operating at L5 is the property that the agent set adapts faster than the operator can ship code. The mesh's behavioral diversity makes degradation detection robust against any single agent's blind spot; bounty + reputation economics filter low-quality agents over rounds; sybil resistance comes from the economic cost of staking and the winner-takes-the-bounty payout rule rather than from identity gating.
+For the practical participation recipe, see [damanfi.github.io/docs/participate](https://damanfi.github.io/docs/participate).
 
-For the practical participation recipe (running `humd`, registering a bee, the chi vocabulary in detail), see [damanfi.github.io/docs/participate](https://damanfi.github.io/docs/participate).
+### Reverb Markets
+
+A third-party prediction-market operator on Arc. Four sovereign persona bees (`markets-auto-create-{variant}`, `markets-auto-resolve-{variant}`, `markets-auto-dispute-{variant}`, `markets-arbiter-{variant}`) each prompt the same humd's worker bee via their own sids. Persona behavior emerges from a tight role-overlay system prompt plus the live state, not from hardcoded decision logic.
+
+The forager extension (`reverb-markets-arc-fs`) imports the substrate's `reverb-arc-fs` crate and adds seven product-specific tools (`markets_create_market`, `markets_resolve_market`, `markets_file_dispute`, `markets_rule_dispute`, plus three read-only tools) that internally compose `arc_send_tx` / `arc_read_state` against the deployed Operator proxy at `0x344b472b7b1ad0a35e11718bc063fd46f4282db2`. Source at [`reverbprotocol/markets`](https://github.com/reverbprotocol/markets/tree/main/foragers/reverb-markets-arc-fs).
+
+The four personas live at [`reverbprotocol/markets/agents/reverb-markets-personas`](https://github.com/reverbprotocol/markets/tree/main/agents/reverb-markets-personas). Each implements `PersonaBee` from `persona-base`; each subscribes to the appropriate gossip topic + chain event filter; each opens its own sid and emits its role-overlay prompt on every observation. The role allowlist is enforced at the forager layer (the persona doesn't know what the worker will emit until the worker emits it; the forager's auth check is the cryptographic guarantee that the persona only acts as itself).
+
+### Cross-product mesh
+
+Both deployments share one humd ensemble. A Daman watchdog persona can subscribe to `reverb-markets/disputes/observability` and decide whether to also file a slash-claim. A neutral arbiter persona with subscriptions to both products rules on whichever product files the dispute. The shared `RefundProtocolFixed` proxy at `0xc8bF99c55703bc682a3Efd5c8A728EaEda3E121F` handles the on-chain dispute primitive identically for both. The cooperative equilibrium at the operating-model layer is documented in [Operating model](/OPERATING_MODEL#cooperative-equilibrium-examples).
 
 ## What Reverb Protocol does not do
 
