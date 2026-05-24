@@ -10,6 +10,7 @@ export default defineConfig({
   themeConfig: {
     nav: [
       { text: 'Overview', link: '/' },
+      { text: 'Autonomy spectrum', link: '/AUTONOMY_SPECTRUM' },
       { text: 'Interfaces', link: '/interfaces/' },
       { text: 'Reference', link: '/reference/' },
       { text: 'CHANGELOG', link: '/changelog' },
@@ -20,6 +21,7 @@ export default defineConfig({
         text: 'Start',
         items: [
           { text: 'Overview', link: '/' },
+          { text: 'Autonomy spectrum', link: '/AUTONOMY_SPECTRUM' },
         ],
       },
       {
