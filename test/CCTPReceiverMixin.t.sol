@@ -40,7 +40,9 @@ contract TestConsumer is CCTPReceiverMixin {
     uint256 public lastMinted;
     uint256 public callCount;
 
-    constructor(address _mt, address _usdc) CCTPReceiverMixin(_mt, _usdc) {}
+    constructor(address _mt, address _usdc) {
+        __CCTPReceiver_init(_mt, _usdc);
+    }
 
     function handlePayload(bytes calldata payload, uint256 mintedAmount) internal override {
         lastPayload = payload;

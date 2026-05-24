@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {RefundProtocolFixed} from "../src/RefundProtocolFixed.sol";
 import {RefundProtocolUpstream} from "./vendor/RefundProtocolUpstream.sol";
 
@@ -21,11 +22,21 @@ contract RefundProtocolFixedTest is Test {
     address public receiver = vm.addr(RECEIVER_PK);
     address public arbiter = address(0xABCD);
     address public refundTo = address(0x9ABC);
+    address public owner = address(0x1010);
+    address public pauser = address(0x2020);
     uint256 public expiry;
 
     function setUp() public {
         usdc = new MockERC20();
-        escrow = new RefundProtocolFixed(arbiter, address(usdc), "Refund Protocol", "1.0");
+        RefundProtocolFixed impl = new RefundProtocolFixed();
+        ERC1967Proxy proxy = new ERC1967Proxy(
+            address(impl),
+            abi.encodeCall(
+                RefundProtocolFixed.initialize,
+                (arbiter, address(usdc), "Refund Protocol", "1.0", owner, pauser)
+            )
+        );
+        escrow = RefundProtocolFixed(address(proxy));
         usdc.mint(user, 1_000);
         usdc.mint(arbiter, 1_000);
         vm.prank(user);
@@ -115,7 +126,15 @@ contract RefundProtocolFixedTest is Test {
     function test_FIX1_executeRefund_marksRefundedBeforeTransfer() public {
         // Sentinel ERC-20 that asserts state-on-transfer.
         StateProbeToken probe = new StateProbeToken();
-        RefundProtocolFixed e = new RefundProtocolFixed(arbiter, address(probe), "P", "1");
+        RefundProtocolFixed eImpl = new RefundProtocolFixed();
+        ERC1967Proxy eProxy = new ERC1967Proxy(
+            address(eImpl),
+            abi.encodeCall(
+                RefundProtocolFixed.initialize,
+                (arbiter, address(probe), "P", "1", owner, pauser)
+            )
+        );
+        RefundProtocolFixed e = RefundProtocolFixed(address(eProxy));
         probe.mint(user, 1000);
         vm.prank(user);
         probe.approve(address(e), type(uint256).max);
