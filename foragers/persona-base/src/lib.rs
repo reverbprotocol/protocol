@@ -15,8 +15,10 @@ pub mod persona;
 pub mod asker;
 pub mod observer;
 pub mod bust;
+pub mod binary;
 
 pub use persona::{Decision, Event, EventFilter, PersonaBee};
 pub use asker::AskerLoop;
 pub use observer::ToolCallObserver;
 pub use bust::BustDetector;
+pub use binary::{AskerConfig, ForagerConfig, PersonaBinarySpec};

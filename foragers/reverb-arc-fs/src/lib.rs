@@ -1,36 +1,37 @@
 //! # reverb-arc-fs
 //!
-//! Canonical resource forager for Arc chain state + wallet operations under the Reverb
-//! Protocol operating-model standard.
+//! Reusable Rust crate that consumer-product persona binaries import to compose their own
+//! per-persona forager. The forager-as-library pattern: each persona binary is its own
+//! forager process holding one EOA private key, one namespaced tool surface, one humd
+//! connection, and one stable ed25519 hid.
 //!
-//! A forager is a thrum-attached process that owns a resource and exposes operations as
-//! `chi:"tool-call"`-addressable tools routed by humd. This crate provides the substrate's
-//! reference implementation of the forager-hive contract documented at
-//! <https://reverbprotocol.github.io/protocol/OPERATING_MODEL>.
+//! Process boundary IS identity boundary, matching the `humfs` per-instance `fs.roots`
+//! pattern from hum's hives catalogue. Consumer products extend the base tool set via
+//! sibling crates (e.g. `reverb-markets-arc-fs`) that expose
+//! `<product>_tools(namespace: &str) -> Vec<Tool>` factories.
 //!
-//! Consumer products extend this crate by importing it as a dependency and adding their own
-//! product-specific tools that internally compose `arc_read_*` and `arc_send_tx`.
+//! Each persona binary carries two keys with separate lifecycles:
+//! - [`BeeIdentity`] — ed25519 seed at `$XDG_STATE_HOME/hum/bees/<kind>.key`, hashed to
+//!   `fbee_<hex>` for the mandatory `hid` field on the hello. humd uses this to dedupe
+//!   the bee across reconnects; without it, every reconnect leaks a fresh manifest.
+//! - [`PrivateKey`] — secp256k1 EOA at `~/.config/hum/<bee>/key`, used to sign Arc
+//!   transactions through the forager's safety pipeline.
 //!
-//! ## Scope
-//!
-//! This crate ships the off-chain operating-model surface:
-//!
-//! - the hello-manifest builder ([`manifest`])
-//! - the wallet keyring ([`keyring`]) with per-bee scoping and 0600 file permissions
-//! - the scoping config loader ([`config`]) with `allowed_contracts` and rate limits
-//! - the tool registry and dispatch trait ([`tools`])
-//! - the six-stage safety pipeline ([`safety`]): auth, ABI validation, simulation gate, rate
-//!   limit, send, receipt cache. Each stage is a checkable invariant.
-//!
-//! The thrum/humd attachment layer and the actual chain I/O are abstracted behind traits so
-//! the crate is unit-testable and can be wired against any concrete RPC transport (alloy,
-//! ethers, custom) by the operator's process layer.
+//! Spec: <https://reverbprotocol.github.io/protocol/OPERATING_MODEL>
+//! Hum hives contract: <https://adiled.github.io/hum/hives/>
 
 pub mod manifest;
 pub mod keyring;
+pub mod identity;
 pub mod config;
 pub mod tools;
 pub mod safety;
 pub mod errors;
+pub mod persona_forager;
 
 pub use errors::ForagerError;
+pub use identity::{BeeIdentity, BeeRole};
+pub use keyring::PrivateKey;
+pub use manifest::Hello;
+pub use persona_forager::{PersonaForager, PersonaForagerBuilder};
+pub use tools::{Idempotency, Tool, ToolCall, ToolRegistry, ToolResult};
