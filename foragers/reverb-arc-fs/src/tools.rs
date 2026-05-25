@@ -62,6 +62,8 @@ type Handler = Arc<dyn Fn(ToolCall) -> Pin<Box<dyn Future<Output = ToolResult> +
 #[derive(Clone)]
 pub struct Tool {
     name: String,
+    description: String,
+    input_schema: serde_json::Value,
     idempotency: Idempotency,
     handler: Handler,
 }
@@ -74,13 +76,37 @@ impl Tool {
     {
         Self {
             name: name.into(),
+            description: String::new(),
+            input_schema: serde_json::json!({ "type": "object", "properties": {} }),
             idempotency: idem,
             handler: Arc::new(move |call| Box::pin(handler(call))),
         }
     }
 
+    /// Builder-style: attach a one-line description. Surfaces in hello's tool defs
+    /// and per-prompt `tools` array so claude knows what the tool does.
+    pub fn with_description(mut self, description: impl Into<String>) -> Self {
+        self.description = description.into();
+        self
+    }
+
+    /// Builder-style: attach a JSON Schema for the tool's argument object. Claude
+    /// uses the schema to construct valid `args` payloads.
+    pub fn with_input_schema(mut self, schema: serde_json::Value) -> Self {
+        self.input_schema = schema;
+        self
+    }
+
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    pub fn description(&self) -> &str {
+        &self.description
+    }
+
+    pub fn input_schema(&self) -> &serde_json::Value {
+        &self.input_schema
     }
 
     pub fn idempotency(&self) -> Idempotency {
@@ -89,6 +115,18 @@ impl Tool {
 
     pub async fn invoke(&self, call: ToolCall) -> ToolResult {
         (self.handler)(call).await
+    }
+
+    /// JSON serialization for hello + per-prompt tools[] arrays. Shape matches
+    /// what humd's hello parser expects (`{name, description, inputSchema}`) so
+    /// the catalogue populates correctly and the merged forager-tools list
+    /// reaches the worker on every chi:"prompt" forward.
+    pub fn to_tool_def(&self) -> serde_json::Value {
+        serde_json::json!({
+            "name": self.name,
+            "description": self.description,
+            "inputSchema": self.input_schema,
+        })
     }
 }
 
@@ -130,6 +168,13 @@ impl ToolRegistry {
         let mut v: Vec<_> = self.tools.iter().map(|t| t.name().to_string()).collect();
         v.sort();
         v
+    }
+
+    /// JSON array of `{name, description, inputSchema}` objects for every
+    /// registered tool. The shape humd's hello parser accepts and that humd
+    /// injects into every chi:"prompt" `foragerTools` field for the worker.
+    pub fn tool_defs(&self) -> Vec<serde_json::Value> {
+        self.tools.iter().map(|t| t.to_tool_def()).collect()
     }
 
     pub fn len(&self) -> usize {

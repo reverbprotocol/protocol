@@ -53,7 +53,7 @@ impl PersonaForager {
 }
 
 /// Composable builder. Required: `bee_name`, `identity`, `private_key`. Optional:
-/// `with_tools`, `allowed_contracts`, `rate_limit`.
+/// `with_tools`, `allowed_contracts`, `rate_limit`, `provides`, `bee_role`, `hive`.
 #[derive(Default)]
 pub struct PersonaForagerBuilder {
     bee_name: Option<String>,
@@ -65,6 +65,9 @@ pub struct PersonaForagerBuilder {
     rate_limit: Option<RateLimit>,
     source_url: Option<String>,
     wire: Option<String>,
+    provides: Option<Vec<String>>,
+    bee_role: Option<Vec<String>>,
+    hive: Option<String>,
 }
 
 impl PersonaForagerBuilder {
@@ -116,6 +119,24 @@ impl PersonaForagerBuilder {
         self
     }
 
+    /// Override the default capability tags. Default is `["session"]`.
+    pub fn provides(mut self, caps: impl IntoIterator<Item = String>) -> Self {
+        self.provides = Some(caps.into_iter().collect());
+        self
+    }
+
+    /// Override the default role array. Default is `["forager"]`.
+    pub fn bee_role(mut self, roles: impl IntoIterator<Item = String>) -> Self {
+        self.bee_role = Some(roles.into_iter().collect());
+        self
+    }
+
+    /// Override the hive (catalogue key) name. Default matches `bee_name`.
+    pub fn hive(mut self, hive: impl Into<String>) -> Self {
+        self.hive = Some(hive.into());
+        self
+    }
+
     /// Build the forager. Returns `BuilderIncomplete` if any required field is missing.
     pub fn build(self) -> Result<PersonaForager, ForagerError> {
         let bee_name = self
@@ -128,20 +149,29 @@ impl PersonaForagerBuilder {
             .private_key
             .ok_or_else(|| ForagerError::BuilderIncomplete("private_key is required".into()))?;
 
-        let tool_names: Vec<String> = self.tools.iter().map(|t| t.name().to_string()).collect();
-        let mut hello = Hello::base(bee_name.clone(), "0.1.0").with_hid(identity.hid_string());
+        let hive_name = self.hive.unwrap_or_else(|| bee_name.clone());
+        let mut hello = Hello::base(hive_name, "0.1.0").with_hid(identity.hid_string());
         if let Some(wire) = self.wire {
             hello = hello.with_wire(wire);
         }
         if let Some(src) = self.source_url {
             hello = hello.with_source(src);
         }
-        // Replace the base tool list with the persona's namespaced tools. The base
-        // `arc_*` surface is opt-in: persona binaries that want it pass the base tools
-        // explicitly via `with_tools(reverb_arc_fs::base_tools(namespace))`.
-        hello.tools = tool_names;
+        if let Some(roles) = self.bee_role {
+            hello = hello.with_bee_role(roles);
+        }
+        if let Some(caps) = self.provides {
+            hello = hello.with_provides(caps);
+        }
 
+        // Replace the base tool list with the persona's namespaced tool defs.
+        // Each Tool serializes as {name, description, inputSchema} via its
+        // builder-attached description + schema; humd's hello parser reads
+        // those objects and humd injects them into every chi:"prompt" the
+        // worker sees, so claude reliably discovers the tool surface.
         let tools = ToolRegistry::new().with_tools(self.tools);
+        hello = hello.with_tool_defs(tools.tool_defs());
+
         let rate_limiter = RateLimiter::new(self.rate_limit.unwrap_or_default());
 
         Ok(PersonaForager {
@@ -242,7 +272,38 @@ mod tests {
             .unwrap();
         assert_eq!(f.tools.len(), 2);
         assert!(f.tools.lookup("mkac_create_market").is_some());
-        assert!(f.hello.tools.contains(&"mkac_create_market".to_string()));
+        let names: Vec<&str> = f
+            .hello
+            .tools
+            .iter()
+            .filter_map(|t| t.get("name").and_then(|n| n.as_str()))
+            .collect();
+        assert!(names.contains(&"mkac_create_market"));
+    }
+
+    #[test]
+    fn hello_defaults_to_forager_role_and_uses_bee_name_as_hive() {
+        let f = PersonaForager::builder()
+            .bee_name("daman-leader-alpha")
+            .identity(id("daman-leader-alpha"))
+            .private_key(pk())
+            .build()
+            .unwrap();
+        assert_eq!(f.hello.bee, vec!["forager".to_string()]);
+        assert_eq!(f.hello.hive, "daman-leader-alpha");
+        assert_eq!(f.hello.provides, vec!["session".to_string()]);
+    }
+
+    #[test]
+    fn hive_override_replaces_default() {
+        let f = PersonaForager::builder()
+            .bee_name("daman-leader-alpha")
+            .hive("daman-persona-shared")
+            .identity(id("daman-leader-alpha"))
+            .private_key(pk())
+            .build()
+            .unwrap();
+        assert_eq!(f.hello.hive, "daman-persona-shared");
     }
 
     #[test]
