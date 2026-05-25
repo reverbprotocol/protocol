@@ -15,7 +15,20 @@ Future consumer products inherit the operating model by importing the substrate'
 
 ## The forager hive contract
 
-A forager is a thrum-attached process that owns a resource and exposes operations as `chi:"tool-call"`-addressable tools routed by humd. The substrate ships `reverb-arc-fs` as the canonical resource forager for Arc chain state, wallet operations, and EIP-712 signing.
+A forager is a thrum-attached process that owns a resource and exposes operations as `chi:"tool-call"`-addressable tools routed by humd. The substrate ships `reverb-arc-fs` as a Rust library that consumer-product persona binaries import to compose their own per-persona forager. There is no standalone shared-forager process; the forager IS each persona binary.
+
+This mirrors `humfs`'s per-instance `fs.roots` scoping from hum's hives catalogue: process boundary is identity boundary. A persona's tool surface, EOA private key, and ed25519 stable identity all share the process they run in. A second persona is a second process with a second key and a second hid.
+
+### Two keys per persona binary
+
+Every persona binary holds two keys with separate lifecycles and separate storage paths:
+
+| Key | Type | Storage path | Purpose |
+|---|---|---|---|
+| `BeeIdentity` | ed25519 (32-byte seed) | `$XDG_STATE_HOME/hum/bees/<bee_name>.key` (0600) | Stable identity to humd. Hashed via `sha256(pubkey)` into the mandatory `hid` field on the hello as `fbee_<hex>`. Minted on first boot, reloaded every subsequent boot. |
+| `PrivateKey` | secp256k1 (hex EOA) | `$XDG_CONFIG_HOME/hum/<bee_name>/key.hex` (0600) | Arc transaction signer. Funded with USDC on Arc testnet for gas. Minted out-of-band via the persona's mint script. |
+
+The `hid` is mandatory. Without it, humd cannot deduplicate the bee across reconnects and every reconnect leaks a fresh manifest, multiplying the bee's tool count until humd restarts. `PersonaForagerBuilder` enforces both keys at construction; a builder missing either field fails with `BuilderIncomplete`.
 
 ### Hello manifest
 
@@ -24,13 +37,14 @@ Every forager announces itself with a `chi:"hello"` tone carrying a manifest:
 ```json
 {
   "chi": "hello",
-  "bee": "reverb-arc-fs",
+  "bee": "markets-auto-create-default",
+  "hid": "fbee_12437df7ceba2c3be95b928503132d5a133cb6d013fc286a577681515fbed9da",
   "version": "0.1.0",
   "protoVersion": "0.7.0",
   "propensity": {
     "statefulness": "stateful",
     "richness": "rich",
-    "wire": "reverb/arc-fs"
+    "wire": "reverb-markets/arc-fs"
   },
   "chis": [
     "hello", "echo", "log", "perf-mark",
@@ -38,52 +52,45 @@ Every forager announces itself with a `chi:"hello"` tone carrying a manifest:
     "gossip-publish"
   ],
   "tools": [
-    "arc_read_balance",
-    "arc_read_event",
-    "arc_read_state",
-    "arc_subscribe_events",
-    "arc_sign_typed_data",
-    "arc_send_tx"
+    "mkac_create_market",
+    "mkac_read_market_state",
+    "mkac_read_settlement_history",
+    "mkac_subscribe_release_feed"
   ],
-  "source": "https://github.com/reverbprotocol/protocol/tree/main/foragers/reverb-arc-fs"
+  "source": "https://github.com/reverbprotocol/markets/tree/main/agents/reverb-markets-personas"
 }
 ```
 
-The manifest's `tools` field is the routing table. humd inspects every incoming `chi:"tool-call"` and routes by `toolName` to the forager whose manifest declares it. A consumer-product forager that declares additional tools (e.g. `markets_create_market`) simply adds them to its own manifest; humd handles the routing without any operator wiring.
+The manifest's `tools` field is the routing table. humd inspects every incoming `chi:"tool-call"` and routes by tool name to the bee whose hello declares it. Each persona's tool names carry a short namespace prefix (`mkac_`, `mkar_`, `mkad_`, `mkarb_` for the four Reverb Markets personas) so that multiple personas on the same humd can coexist without name collisions.
 
 ### Tool registry expectations
 
 Each tool has:
 
-- A `toolName` (snake_case, namespaced: `arc_*` for base forager, `markets_*` for the Reverb Markets extension, `daman_*` for Daman's extension)
-- A typed input schema (validated against the on-chain function's input shape before any chain call)
-- A typed output schema (returned via `chi:"tool-result"` with the original `callId`)
-- An idempotency declaration (read tools are idempotent; write tools are not)
+- A tool name following `<namespace>_<action>`, where namespace is a short alias of the persona's bee name (e.g. `mkac` for `markets-auto-create-*`).
+- A typed input schema (validated against the on-chain function's input shape before any chain call).
+- A typed output schema (returned via `chi:"tool-result"` with the original `callId`).
+- An idempotency declaration (read tools are idempotent; write tools are not).
 
-Every write tool requires an `as_bee` argument naming the bee that should sign. The forager verifies the incoming chi's `from` field matches `as_bee` (no impersonation) before looking up the EOA in its keyring.
+Role enforcement is structural: a persona's `PersonaForagerBuilder::with_tools(...)` call registers only the tools that persona is authorized to invoke. A tool not registered cannot be called through that persona's forager process. The `markets-auto-create` binary registers `mkac_create_market` but never `mkac_rule_dispute`; the LLM running inside that persona's worker session cannot reach disputes even if it hallucinates a call.
 
-### Keyring scoping
-
-The forager owns a keyring at `~/.config/hum/{forager-name}/keyring.json`. Each entry maps `bee_name → EOA private key`. Loaded at boot with restrictive filesystem permissions (0600).
-
-A consumer-product forager that extends the base forager inherits the keyring loader and the auth check; it does not get to bypass either. The keyring is humd-local: in a multi-humd ensemble each humd's forager instance holds only the EOAs of bees on that humd. No cross-humd key sharing.
+There is no per-call `as_bee` auth check, because the process IS the bee. A tool call arriving on the persona's thrum socket is by definition addressed to that persona's EOA.
 
 ### Safety pipeline requirements
 
-Every write tool runs through a six-stage pipeline. Each stage may surface a structured error to the consumer via `chi:"tool-result"`.
+Every write tool runs through a five-stage pipeline. Each stage may surface a structured error to the consumer via `chi:"tool-result"`.
 
-1. **Auth check.** `chi.from == args.as_bee`, else `Unauthorized` error.
-2. **ABI validation.** Args match the on-chain function's input schema.
+1. **ABI validation.** Args match the on-chain function's input schema.
+2. **Allowed-contracts gate.** The target contract is in the persona's `allowed_contracts` list, the analog of `humfs`'s `fs.roots`.
 3. **Simulation gate.** `eth_call` against current state; revert surfaces in tool-result with the reason.
-4. **Rate limit.** Shared across all consumers; per-bee + per-tool + global throttles.
-5. **Send.** Sign + submit. On chain revert despite simulation pass, log race and return error.
-6. **Receipt cache.** Tx hash + receipt cached for downstream reads.
+4. **Rate limit.** Per-tool + global throttles.
+5. **Send.** Sign with the persona's `PrivateKey` + submit. On chain revert despite simulation pass, log race and return error.
 
 A forager that skips any stage is non-conformant. Tests in the substrate's `reverb-arc-fs` crate exercise each stage as an independent invariant.
 
 ### Scoping configuration
 
-The forager's config at `~/.config/hum/{forager-name}/config.json`:
+The persona binary's per-process config lives at `$XDG_CONFIG_HOME/hum/<bee_name>/config.json`:
 
 ```json
 {
@@ -91,18 +98,16 @@ The forager's config at `~/.config/hum/{forager-name}/config.json`:
   "explorer_api": "https://testnet.arcscan.app/api/v2",
   "chain_id": 5042002,
   "allowed_contracts": [
-    "0xc8bF99c55703bc682a3Efd5c8A728EaEda3E121F",
     "0x344b472b7b1ad0a35e11718bc063fd46f4282db2"
   ],
   "rate_limit": {
-    "per_bee_tx_per_minute": 12,
     "per_tool_tx_per_minute": 60,
     "global_tx_per_minute": 200
   }
 }
 ```
 
-`allowed_contracts` is the analog of `humfs`'s `fs.roots`: a hard boundary on which contracts the forager will write to. Consumer products that deploy new contracts add their addresses to this list.
+`allowed_contracts` is the persona's write boundary. The `markets-auto-create` persona only writes to the Reverb Markets `Operator`; the `markets-arbiter` persona writes to both the `Operator` and the substrate's `RefundProtocolFixed` dispute primitive. Setting the list correctly per persona is part of role definition.
 
 ## The persona bee contract
 
@@ -121,7 +126,7 @@ The persona itself contains no decision logic. The decision is the LLM's, made i
 5. Observe `chi:"tool-call"`, `chi:"tool-result"`, `chi:"chunk"`, and `chi:"finish"` on the sid
 6. Log the bloom for audit
 
-The role allowlist (which tool calls a persona is permitted to make) is enforced at the **forager** layer, not the persona layer. The persona doesn't know what the worker will emit until the worker emits it; the forager's auth check is the cryptographic guarantee that the persona only acts as itself.
+The role allowlist (which tool calls a persona is permitted to make) is enforced **structurally at composition time**, not via per-call auth: each persona binary registers only the tools it is authorized to call via `PersonaForagerBuilder::with_tools(...)`. A tool the persona did not register cannot be invoked through that persona's process. Because the process is the bee, a tool call landing on the persona's thrum socket is by definition addressed to that persona's EOA.
 
 ### Sid management
 
@@ -188,9 +193,10 @@ The pilot operates at L0 on the forager layer (deterministic) and L5 on the pers
 
 ## Reference implementations
 
-- **`foragers/reverb-arc-fs/`**: Rust crate; the canonical resource forager. Owns Arc state + wallet keyring + tool routing. Source at [`reverbprotocol/protocol`](https://github.com/reverbprotocol/protocol/tree/main/foragers/reverb-arc-fs).
-- **`foragers/persona-base/`**: Rust crate; the persona bee scaffolding (`PersonaBee` trait, `AskerLoop` boilerplate, `ToolCallObserver`). Source at [`reverbprotocol/protocol`](https://github.com/reverbprotocol/protocol/tree/main/foragers/persona-base).
-- **`reverbprotocol/markets/foragers/reverb-markets-arc-fs/`**: extension forager for Reverb Markets's product-specific tools. Imports `reverb-arc-fs` and reuses the keyring + safety pipeline.
-- **`damanfi/copy-bond/foragers/daman-arc-fs/`**: extension forager for Daman's product-specific tools. Same composition pattern.
+- **`foragers/reverb-arc-fs/`** (Rust library): the canonical Arc-state + wallet substrate. Exposes `BeeIdentity::load_or_mint`, `PrivateKey::load`, `PersonaForager`, `PersonaForagerBuilder`, the safety pipeline traits, and the base `arc_*` tool definitions. Imported as a Cargo dependency by every consumer-product persona binary. Source at [`reverbprotocol/protocol`](https://github.com/reverbprotocol/protocol/tree/main/foragers/reverb-arc-fs).
+- **`foragers/persona-base/`** (Rust library): persona-side scaffolding. `PersonaBee` trait + `AskerLoop` + `ToolCallObserver` + `BustDetector` + `PersonaBinarySpec`. Source at [`reverbprotocol/protocol`](https://github.com/reverbprotocol/protocol/tree/main/foragers/persona-base).
+- **`reverbprotocol/markets/foragers/reverb-markets-arc-fs/`** (Rust library): exposes `markets_tools(namespace: &str) -> Vec<Tool>` and per-action factory functions (`create_market`, `resolve_market`, `file_dispute`, `rule_dispute`, `read_market_state`, `read_settlement_history`, `subscribe_release_feed`). Each persona binary picks its own subset.
+- **`reverbprotocol/markets/agents/reverb-markets-personas/`** (four Rust binaries): `markets-auto-create`, `markets-auto-resolve`, `markets-auto-dispute`, `markets-arbiter`. Each composes `PersonaForagerBuilder` + role-scoped subset of `markets_tools` + role-scoped `allowed_contracts` + the matching `PersonaBee` impl from the library half of the crate.
+- **`damanfi/copy-bond/`** (in progress at time of writing): same composition pattern, separate persona set.
 
-A consumer product that wants to operate on the substrate at any autonomy level above L0 imports `persona-base` and follows the forager extension pattern.
+A consumer product that wants to operate on the substrate at any autonomy level above L0 imports `persona-base` and `reverb-arc-fs`, defines per-action tool factories in a product-specific library crate, and ships one binary per persona role. The persona's role is defined by three composition choices: which tools it registers, which contracts it lists in `allowed_contracts`, and the role-overlay system prompt its `PersonaBee` impl returns.
